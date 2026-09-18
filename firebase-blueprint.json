@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile for contributors and administrators",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["admin", "contributor"] },
+        "subjectSpecialty": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "name", "role", "createdAt", "lastLoginAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Multiple-choice quiz question with 4 options",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "maxLength": 3000 },
+        "options": {
+          "type": "object",
+          "properties": {
+            "A": { "type": "string", "maxLength": 1000 },
+            "B": { "type": "string", "maxLength": 1000 },
+            "C": { "type": "string", "maxLength": 1000 },
+            "D": { "type": "string", "maxLength": 1000 }
+          },
+          "required": ["A", "B", "C", "D"]
+        },
+        "correctOption": { "type": "string", "enum": ["A", "B", "C", "D"] },
+        "subject": { "type": "string", "maxLength": 150 },
+        "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
+        "tags": { "type": "array" },
+        "referenceExplanation": { "type": "string", "maxLength": 3000 },
+        "contributorUid": { "type": "string", "maxLength": 128 },
+        "contributorName": { "type": "string", "maxLength": 100 },
+        "contributorEmail": { "type": "string", "format": "email", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "text", "options", "correctOption", "subject", "difficulty", "contributorUid", "contributorName", "contributorEmail", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and contribution profile details"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Central repository of quiz questions submitted by contributors"
+    }
+  }
+}

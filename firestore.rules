@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'pandit.alap@gmail.com' ||
+        request.auth.token.email == 'Pandit.Alap@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Question validation
+    function isValidQuestion(data) {
+      return data.keys().hasAll(['id', 'text', 'options', 'correctOption', 'subject', 'difficulty', 'contributorUid', 'contributorName', 'contributorEmail', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.text is string && data.text.size() > 0 && data.text.size() <= 3000 &&
+        data.options is map &&
+        data.options.keys().hasAll(['A', 'B', 'C', 'D']) &&
+        data.options.A is string && data.options.A.size() <= 1000 &&
+        data.options.B is string && data.options.B.size() <= 1000 &&
+        data.options.C is string && data.options.C.size() <= 1000 &&
+        data.options.D is string && data.options.D.size() <= 1000 &&
+        data.correctOption in ['A', 'B', 'C', 'D'] &&
+        data.subject is string && data.subject.size() > 0 && data.subject.size() <= 150 &&
+        data.difficulty in ['Easy', 'Medium', 'Hard'] &&
+        data.contributorUid is string && data.contributorUid.size() <= 128 &&
+        data.contributorEmail is string && data.contributorEmail.size() <= 256;
+    }
+
+    // User profile validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'createdAt', 'lastLoginAt']) &&
+        data.uid is string && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() <= 256 &&
+        data.name is string && data.name.size() <= 150 &&
+        data.role in ['admin', 'contributor'];
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /questions/{questionId} {
+      // Questions can be read by anyone exploring the question bank or signed-in contributors
+      allow read: if true;
+      allow create: if isSignedIn() &&
+        isValidQuestion(request.resource.data) &&
+        request.resource.data.contributorUid == request.auth.uid;
+      allow update: if isSignedIn() &&
+        isValidQuestion(request.resource.data) &&
+        (request.resource.data.contributorUid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() &&
+        (resource.data.contributorUid == request.auth.uid || isAdmin());
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

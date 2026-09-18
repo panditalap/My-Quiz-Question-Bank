@@ -1,0 +1,6 @@
+{
+  "name": "Quiz Question Bank",
+  "description": "A collaborative portal for contributors to submit, manage, search, and export multiple-choice quiz questions with answer keys, explanations, and admin oversight.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
