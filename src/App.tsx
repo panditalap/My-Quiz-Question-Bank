@@ -11,6 +11,7 @@ import { PracticeQuizModal } from './components/PracticeQuizModal';
 import { LoginPage } from './components/LoginPage';
 import { 
   getStoredQuestions, 
+  fetchQuestionsFromFirestore,
   addOrUpdateQuestion, 
   deleteQuestionById,
   subscribeToQuestions
@@ -52,13 +53,28 @@ function MainApp() {
     }
   }, [currentUser?.uid, isAdmin]);
 
-  // Subscribe to real-time Firestore updates
+  // Subscribe to real-time Firestore updates and fetch fresh data immediately on login
   useEffect(() => {
-    const unsubscribe = subscribeToQuestions((updatedQuestions) => {
-      setQuestions(updatedQuestions);
+    let isMounted = true;
+
+    // Immediately fetch fresh questions directly from Firestore
+    fetchQuestionsFromFirestore().then((fetched) => {
+      if (isMounted && fetched && fetched.length > 0) {
+        setQuestions(fetched);
+      }
     });
-    return () => unsubscribe();
-  }, []);
+
+    const unsubscribe = subscribeToQuestions((updatedQuestions) => {
+      if (isMounted) {
+        setQuestions(updatedQuestions);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [currentUser?.uid]);
 
   // Filtered counts
   const myQuestions = useMemo(() => {

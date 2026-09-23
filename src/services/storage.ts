@@ -1,6 +1,6 @@
 import { Question, User, ExportFormat, CorrectOption, Difficulty } from '../types';
 import { INITIAL_QUESTIONS, INITIAL_USERS, ADMIN_EMAIL } from './seedData';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { 
   collection, 
   doc, 
@@ -138,6 +138,28 @@ export interface QuestionInput {
 }
 
 /**
+ * Direct async fetch of questions from Firestore with fallback to cached questions
+ */
+export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
+  try {
+    const qCol = collection(db, 'questions');
+    const snapshot = await getDocs(qCol);
+    if (!snapshot.empty) {
+      const list: Question[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data() as Question);
+      });
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      saveAllQuestions(list);
+      return list;
+    }
+  } catch (err) {
+    console.warn('Direct questions fetch notice:', err);
+  }
+  return getStoredQuestions();
+}
+
+/**
  * Real-time Firestore subscription with local cache fallback
  */
 export function subscribeToQuestions(
@@ -151,14 +173,16 @@ export function subscribeToQuestions(
     if (snapshot.empty && !hasSeeded) {
       hasSeeded = true;
       const initial = getStoredQuestions();
-      try {
-        const batch = writeBatch(db);
-        initial.forEach(q => {
-          batch.set(doc(db, 'questions', q.id), q);
-        });
-        await batch.commit();
-      } catch (e) {
-        console.warn('Initial questions Firestore seeding notice:', e);
+      if (auth.currentUser) {
+        try {
+          const batch = writeBatch(db);
+          initial.forEach(q => {
+            batch.set(doc(db, 'questions', q.id), q);
+          });
+          await batch.commit();
+        } catch (e) {
+          console.warn('Initial questions Firestore seeding notice:', e);
+        }
       }
       onUpdate(initial);
       return;

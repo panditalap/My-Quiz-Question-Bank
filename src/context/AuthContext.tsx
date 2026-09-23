@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
 import { isUserAdmin } from '../services/storage';
 import { ADMIN_EMAIL } from '../services/seedData';
 
@@ -33,16 +33,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
-  // Synchronize registered users from Firestore
+  // Synchronize registered users from Firestore whenever authenticated
   useEffect(() => {
+    if (!currentUser) {
+      setAllUsers([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    // 1. Fetch immediately to ensure instant availability without requiring page reload
+    const loadUsers = async () => {
+      try {
+        const usersCol = collection(db, 'users');
+        const snap = await getDocs(usersCol);
+        if (!isMounted) return;
+        const list: User[] = [];
+        snap.forEach(docSnap => {
+          const u = docSnap.data() as User;
+          const emailLower = (u.email || '').toLowerCase();
+          if (
+            emailLower === 'sarah.chen@university.edu' ||
+            emailLower === 'marcus.vance@history.org' ||
+            emailLower === 'priya.sharma@tech.io' ||
+            u.uid === 'usr_sarah_chen' ||
+            u.uid === 'usr_marcus_vance' ||
+            u.uid === 'usr_priya_sharma'
+          ) {
+            deleteDoc(doc(db, 'users', docSnap.id)).catch(() => {});
+            return;
+          }
+          list.push(u);
+        });
+        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setAllUsers(list);
+      } catch (err: any) {
+        console.warn('Initial users fetch notice:', err?.message || err);
+      }
+    };
+
+    loadUsers();
+
+    // 2. Maintain a live snapshot listener for real-time changes
     const path = 'users';
     const usersCol = collection(db, path);
     const unsubscribe = onSnapshot(usersCol, (snapshot) => {
+      if (!isMounted) return;
       const list: User[] = [];
       snapshot.forEach(docSnap => {
         const u = docSnap.data() as User;
         const emailLower = (u.email || '').toLowerCase();
-        // Ensure no mock/temp users appear
         if (
           emailLower === 'sarah.chen@university.edu' ||
           emailLower === 'marcus.vance@history.org' ||
@@ -51,7 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           u.uid === 'usr_marcus_vance' ||
           u.uid === 'usr_priya_sharma'
         ) {
-          // Purge legacy mock documents from Firestore database
           deleteDoc(doc(db, 'users', docSnap.id)).catch(() => {});
           return;
         }
@@ -64,8 +103,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Notice listening to users collection:', error.message);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [currentUser?.uid]);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -136,8 +178,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const refreshUsers = () => {
-    // Live snapshot automatically handles updates
+  const refreshUsers = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const list: User[] = [];
+      snap.forEach(docSnap => {
+        const u = docSnap.data() as User;
+        const emailLower = (u.email || '').toLowerCase();
+        if (
+          emailLower !== 'sarah.chen@university.edu' &&
+          emailLower !== 'marcus.vance@history.org' &&
+          emailLower !== 'priya.sharma@tech.io' &&
+          u.uid !== 'usr_sarah_chen' &&
+          u.uid !== 'usr_marcus_vance' &&
+          u.uid !== 'usr_priya_sharma'
+        ) {
+          list.push(u);
+        }
+      });
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setAllUsers(list);
+    } catch (err) {
+      console.warn('Manual refresh users note:', err);
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {

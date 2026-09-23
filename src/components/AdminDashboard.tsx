@@ -46,8 +46,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   setSelectedIds,
   initialSubTab = 'questions',
 }) => {
-  const { currentUser, allUsers } = useAuth();
+  const { currentUser, allUsers, refreshUsers } = useAuth();
   const [subTab, setSubTab] = useState<'questions' | 'users' | 'settings'>(initialSubTab);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualSync = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshUsers();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   // Admin Config state
   const [adminConfig, setAdminConfig] = useState(getAdminConfig());
@@ -378,7 +388,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {subTab === 'users' && (
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
                   Registered Contributors & Activity Matrix
@@ -387,9 +397,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Track individual contribution totals, subject specialties, and last active dates.
                 </p>
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">
-                {userStats.length} Total Users
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isRefreshing}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                  title="Synchronize live user documents directly from database"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
+                  <span>{isRefreshing ? 'Syncing...' : 'Sync Database'}</span>
+                </button>
+                <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700">
+                  {userStats.length} Total Users
+                </span>
+              </div>
             </div>
 
             {userStats.length === 0 ? (
