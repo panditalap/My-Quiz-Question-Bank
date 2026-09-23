@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuizMaster - Interactive Question Bank</title>
+  <meta name="description" content="Collaborative Quiz Question Bank with multi-subject tagging, live Firestore sync, and LMS export.">
+  
+  <!-- Tailwind CSS via Official CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons via CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Custom scrollbar & font smoothing */
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .modal-backdrop {
+      background-color: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+
+  <!-- TOP NAVBAR -->
+  <header class="bg-slate-900 text-white sticky top-0 z-40 border-b border-slate-800 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" id="nav-brand">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-lg tracking-tight">QuizMaster</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">Bank</span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Collaborative Question Hub</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs font-semibold">
+        <button id="tab-btn-explore" class="tab-btn px-3.5 py-1.5 rounded-lg transition-all text-white bg-blue-600">
+          Explore Bank
+        </button>
+        <button id="tab-btn-my" class="tab-btn px-3.5 py-1.5 rounded-lg transition-all text-slate-300 hover:text-white">
+          My Questions <span id="my-count-badge" class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-700">0</span>
+        </button>
+        <button id="tab-btn-admin" class="tab-btn hidden px-3.5 py-1.5 rounded-lg transition-all text-amber-300 hover:text-amber-200 flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+          <span>Admin Center</span>
+        </button>
+      </nav>
+
+      <!-- Right Header Actions -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Quick Action Buttons -->
+        <button id="btn-practice-quiz" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>Practice Quiz</span>
+        </button>
+
+        <button id="btn-add-question" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Add Question</span>
+        </button>
+
+        <!-- Auth Status Pill -->
+        <div id="auth-container" class="flex items-center">
+          <!-- Populated by JavaScript -->
+          <button id="btn-open-signin" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5">
+            <i data-lucide="log-in" class="w-3.5 h-3.5 text-blue-400"></i>
+            <span>Sign In</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MOBILE NAVIGATION TABS (visible only on small screens) -->
+  <div class="md:hidden bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-around text-xs font-medium">
+    <button id="mob-tab-explore" class="text-blue-400 font-semibold py-1">Explore</button>
+    <button id="mob-tab-my" class="text-slate-400 py-1">My Questions</button>
+    <button id="mob-tab-admin" class="hidden text-amber-400 py-1">Admin</button>
+    <button id="mob-btn-quiz" class="text-slate-400 py-1 flex items-center gap-1">
+      <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i> Quiz
+    </button>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- VIEW 1: EXPLORE QUESTION BANK -->
+    <section id="view-explore" class="space-y-6">
+      
+      <!-- Metrics Strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Total Questions</span>
+          <span id="metric-total-questions" class="text-2xl font-black text-slate-900 mt-1 block">0</span>
+          <span class="text-[11px] text-slate-400">Available in repository</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Disciplines</span>
+          <span id="metric-total-subjects" class="text-2xl font-black text-slate-900 mt-1 block">0</span>
+          <span class="text-[11px] text-slate-400">Unique subjects</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">My Contributions</span>
+          <span id="metric-my-questions" class="text-2xl font-black text-blue-600 mt-1 block">0</span>
+          <span class="text-[11px] text-slate-400">Submitted by you</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Database Status</span>
+          <span class="text-xs font-bold text-emerald-600 mt-2 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Firestore Live
+          </span>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">ai-studio-quiz...</span>
+        </div>
+      </div>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-3.5">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <!-- Search Input -->
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input 
+              type="text" 
+              id="filter-search" 
+              placeholder="Search questions, options, topics, or contributors..." 
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+          </div>
+
+          <!-- Subject Dropdown -->
+          <select id="filter-subject" class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer">
+            <option value="">All Subjects</option>
+          </select>
+
+          <!-- Difficulty Dropdown -->
+          <select id="filter-difficulty" class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer">
+            <option value="">All Difficulties</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+
+          <!-- Sort Dropdown -->
+          <select id="filter-sort" class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="subject">Subject (A-Z)</option>
+            <option value="difficulty">Difficulty (Easy-Hard)</option>
+          </select>
+        </div>
+
+        <!-- Action bar: Selection & Export -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
+          <div class="flex items-center gap-2">
+            <button id="btn-select-all" class="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer">
+              Select All Visible
+            </button>
+            <span class="text-slate-300">|</span>
+            <button id="btn-deselect-all" class="text-slate-500 hover:text-slate-700 cursor-pointer">
+              Clear Selection
+            </button>
+            <span id="selection-counter" class="ml-2 font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">
+              0 selected
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="btn-open-export" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium flex items-center gap-1.5 transition-all cursor-pointer">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Export Questions</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Question Cards List Container -->
+      <div id="questions-list" class="space-y-3.5">
+        <!-- Rendered dynamically by JavaScript -->
+        <div class="py-16 text-center text-slate-400">
+          <i data-lucide="loader-2" class="w-8 h-8 animate-spin mx-auto text-blue-500 mb-2"></i>
+          <p class="text-sm font-medium text-slate-600">Loading questions from Firestore...</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- VIEW 2: MY QUESTIONS -->
+    <section id="view-my-questions" class="hidden space-y-6">
+      <div class="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">My Contributed Questions</h2>
+          <p class="text-xs text-slate-500 mt-1">Manage and edit the questions you have authored in this database.</p>
+        </div>
+        <button id="btn-my-add-question" class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Create New</span>
+        </button>
+      </div>
+
+      <div id="my-questions-list" class="space-y-3.5">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- VIEW 3: ADMIN CONTROL CENTER -->
+    <section id="view-admin" class="hidden space-y-6">
+      
+      <!-- Admin Top Banner -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 sm:p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-lg font-bold">Admin Control Center</h2>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-500/40">ADMIN ACTIVE</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Authorized as: <span class="font-mono text-slate-200 font-bold">Pandit.Alap@gmail.com</span></p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-admin-refresh" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-400"></i>
+            <span>Sync Live Users</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Registered Contributors Table -->
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Registered Contributors & Activity Matrix</h3>
+            <p class="text-xs text-slate-500">Live user documents from the Firestore users collection</p>
+          </div>
+          <span id="admin-user-count" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">0 Users</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 border-b border-slate-100 text-slate-700 uppercase font-semibold text-[11px] tracking-wider">
+              <tr>
+                <th class="py-3 px-4">Contributor</th>
+                <th class="py-3 px-4">Role</th>
+                <th class="py-3 px-4">Questions</th>
+                <th class="py-3 px-4">Subjects</th>
+                <th class="py-3 px-4">Joined Date</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body" class="divide-y divide-slate-100">
+              <!-- Populated by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p>QuizMaster Question Bank • Pure HTML + JS Standalone Edition</p>
+      <p class="text-slate-400 font-mono text-[11px]">No build step required • Directly editable</p>
+    </div>
+  </footer>
+
+  <!-- MODAL 1: ADD / EDIT QUESTION -->
+  <div id="modal-question" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 id="modal-question-title" class="text-base font-bold text-slate-900">Add New Question</h3>
+        <button id="modal-question-close" class="text-slate-400 hover:text-slate-600 cursor-pointer p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body Form -->
+      <form id="form-question" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs sm:text-sm">
+        <input type="hidden" id="q-id" value="">
+
+        <!-- Prompt Text -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Question Prompt *</label>
+          <textarea id="q-text" rows="3" required placeholder="Type the question text here..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden"></textarea>
+        </div>
+
+        <!-- Subject & Difficulty Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Subject / Discipline *</label>
+            <input type="text" id="q-subject" required placeholder="e.g. Physics, World History" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Difficulty Level *</label>
+            <select id="q-difficulty" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden">
+              <option value="Easy">Easy</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Options A, B, C, D -->
+        <div class="space-y-2.5 pt-2">
+          <label class="block font-semibold text-slate-700">Options & Correct Answer *</label>
+          
+          <div class="flex items-center gap-2">
+            <input type="radio" name="q-correct" value="A" id="correct-a" checked class="w-4 h-4 text-blue-600">
+            <span class="font-bold text-slate-600 w-5">A:</span>
+            <input type="text" id="q-opt-a" required placeholder="Option A" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input type="radio" name="q-correct" value="B" id="correct-b" class="w-4 h-4 text-blue-600">
+            <span class="font-bold text-slate-600 w-5">B:</span>
+            <input type="text" id="q-opt-b" required placeholder="Option B" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input type="radio" name="q-correct" value="C" id="correct-c" class="w-4 h-4 text-blue-600">
+            <span class="font-bold text-slate-600 w-5">C:</span>
+            <input type="text" id="q-opt-c" required placeholder="Option C" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input type="radio" name="q-correct" value="D" id="correct-d" class="w-4 h-4 text-blue-600">
+            <span class="font-bold text-slate-600 w-5">D:</span>
+            <input type="text" id="q-opt-d" required placeholder="Option D" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          </div>
+        </div>
+
+        <!-- Reference / Explanation -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Reference / Solution Explanation</label>
+          <textarea id="q-ref" rows="2" placeholder="Explain why the correct answer is correct..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden text-xs"></textarea>
+        </div>
+
+        <!-- Tags -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Tags (comma-separated)</label>
+          <input type="text" id="q-tags" placeholder="e.g. mechanics, exam-prep, unit-1" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs">
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" id="modal-question-cancel" class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer">Cancel</button>
+          <button type="submit" id="modal-question-submit" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer flex items-center gap-1.5">
+            <span>Save to Bank</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: AUTHENTICATION -->
+  <div id="modal-auth" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 id="modal-auth-title" class="text-base font-bold text-slate-900">Sign in to QuizMaster</h3>
+        <button id="modal-auth-close" class="text-slate-400 hover:text-slate-600 cursor-pointer p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4 text-xs sm:text-sm">
+        <!-- Google Sign In Button -->
+        <button id="btn-google-signin" class="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 font-semibold text-slate-700 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs">
+          <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+          <span>Continue with Google</span>
+        </button>
+
+        <div class="relative text-center my-3">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <span class="relative bg-white px-2 text-slate-400 text-[11px] font-medium uppercase tracking-wider">or email</span>
+        </div>
+
+        <!-- Email & Password Form -->
+        <form id="form-auth" class="space-y-3">
+          <div id="auth-signup-fields" class="space-y-3 hidden">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Full Name</label>
+              <input type="text" id="auth-name" placeholder="Prof. Jane Doe" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Subject Specialty</label>
+              <input type="text" id="auth-specialty" placeholder="e.g. Mathematics" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Email Address</label>
+            <input type="email" id="auth-email" required placeholder="you@domain.com" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Password</label>
+            <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+          </div>
+
+          <div id="auth-error-msg" class="text-xs text-rose-600 font-medium hidden"></div>
+
+          <button type="submit" id="btn-auth-submit" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-all cursor-pointer">
+            Sign In
+          </button>
+        </form>
+
+        <div class="text-center pt-2">
+          <button id="btn-toggle-auth-mode" class="text-xs text-blue-600 hover:underline font-semibold cursor-pointer">
+            Don't have an account? Sign up
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: PRACTICE QUIZ -->
+  <div id="modal-quiz" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+          <span>Practice Quiz Simulation</span>
+        </h3>
+        <button id="modal-quiz-close" class="text-slate-400 hover:text-slate-600 cursor-pointer p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="quiz-container" class="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+        <!-- Rendered by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: EXPORT QUESTIONS -->
+  <div id="modal-export" class="fixed inset-0 z-50 modal-backdrop hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="download" class="w-4 h-4 text-blue-600"></i>
+          <span>Export Question Bank</span>
+        </h3>
+        <button id="modal-export-close" class="text-slate-400 hover:text-slate-600 cursor-pointer p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs sm:text-sm">
+        <p class="text-slate-600">Choose the format to download your selected or all questions for LMS integration:</p>
+
+        <div class="space-y-2">
+          <button id="btn-export-json" class="w-full p-3.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 flex items-center justify-between transition-all cursor-pointer text-left">
+            <div>
+              <span class="font-bold text-slate-900 block">JSON Format</span>
+              <span class="text-xs text-slate-500">Full schema export with explanations and tags</span>
+            </div>
+            <i data-lucide="file-code" class="w-5 h-5 text-blue-600"></i>
+          </button>
+
+          <button id="btn-export-csv" class="w-full p-3.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 flex items-center justify-between transition-all cursor-pointer text-left">
+            <div>
+              <span class="font-bold text-slate-900 block">CSV Spreadsheet</span>
+              <span class="text-xs text-slate-500">Excel / Google Sheets compatible tabular columns</span>
+            </div>
+            <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-600"></i>
+          </button>
+
+          <button id="btn-export-gift" class="w-full p-3.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 flex items-center justify-between transition-all cursor-pointer text-left">
+            <div>
+              <span class="font-bold text-slate-900 block">GIFT Format</span>
+              <span class="text-xs text-slate-500">Standard for Moodle, Canvas, and Blackboard LMS</span>
+            </div>
+            <i data-lucide="layers" class="w-5 h-5 text-amber-600"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-800 text-xs font-semibold flex items-center gap-2 transition-all duration-200 translate-y-12 opacity-0 pointer-events-none">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-text">Success message</span>
+  </div>
+
+  <!-- Plain JavaScript Logic (ES Modules natively supported in all modern browsers) -->
+  <script type="module" src="./app.js"></script>
+
+  <script>
+    // Initialize Lucide icons on load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
